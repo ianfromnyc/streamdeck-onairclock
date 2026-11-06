@@ -223,7 +223,7 @@ function updateClock(jsn) {
 
         currentElement.hourFormat = jsn.payload.settings.hourFormat || gTimeFormatDefault
         currentElement.ampmindicator = jsn.payload.settings.ampmindicator === "true" || jsn.payload.settings.ampmindicator === true
-        currentElement.timezone = isValidTimezone(jsn.payload.settings.timezone) ? jsn.payload.settings.timezone : gTimezoneDefault
+        currentElement.timeFormatter = createTimeFormatter(jsn.payload.settings.timezone)
 
         console.log("Update settings - hourFormat:", jsn.payload.settings.hourFormat, "ampmindicator:", jsn.payload.settings.ampmindicator)
         console.log("Stored in element - hourFormat:", currentElement.hourFormat, "ampmindicator:", currentElement.ampmindicator)
@@ -274,7 +274,7 @@ function updateClock(jsn) {
 
         currentElement.hourFormat = jsn.payload.settings.hourFormat || gTimeFormatDefault
         currentElement.ampmindicator = jsn.payload.settings.ampmindicator === "true" || jsn.payload.settings.ampmindicator === true
-        currentElement.timezone = isValidTimezone(jsn.payload.settings.timezone) ? jsn.payload.settings.timezone : gTimezoneDefault
+        currentElement.timeFormatter = createTimeFormatter(jsn.payload.settings.timezone)
 
         console.log("New element settings - hourFormat:", jsn.payload.settings.hourFormat, "ampmindicator:", jsn.payload.settings.ampmindicator)
         console.log("New element stored - hourFormat:", currentElement.hourFormat, "ampmindicator:", currentElement.ampmindicator)
@@ -353,7 +353,7 @@ function displayTime(canvas, jsn) {
     var ampmindicator = currentElement.ampmindicator
     console.log("ampm indicator received: " + ampmindicator)
 
-    var now = getTimeParts(currentElement.timezone);
+    var now = getTimeParts(currentElement.timeFormatter);
 
     var h
     if (hourFormat === "12") {
@@ -630,11 +630,11 @@ function displayTime(canvas, jsn) {
 
 
 
-// returns the current time, either in system timezone or the given tzdata timezone
-function getTimeParts(timezone) {
+// returns the current time, either in system timezone or via the given timezone formatter
+function getTimeParts(timeFormatter) {
     var now = new Date();
 
-    if (timezone === gTimezoneDefault) {
+    if (!timeFormatter) {
         return {
             hours: now.getHours(),
             minutes: now.getMinutes(),
@@ -645,17 +645,9 @@ function getTimeParts(timezone) {
         }
     }
 
+    // offset (incl. DST) is resolved for the given instant on every call, so the formatter can be reused
     var parts = {}
-    new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone,
-        hourCycle: 'h23',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric'
-    }).formatToParts(now).forEach(part => parts[part.type] = parseInt(part.value))
+    timeFormatter.formatToParts(now).forEach(part => parts[part.type] = parseInt(part.value))
 
     return {
         hours: parts.hour % 24,
@@ -667,14 +659,22 @@ function getTimeParts(timezone) {
     }
 }
 
-function isValidTimezone(timezone) {
-    if (timezone === gTimezoneDefault) return true;
-    if (typeof timezone !== "string") return false;
+// created once per settings change, returns null for system setting or unknown timezones
+function createTimeFormatter(timezone) {
+    if (timezone === gTimezoneDefault || typeof timezone !== "string") return null;
     try {
-        new Intl.DateTimeFormat('en-US', { timeZone: timezone });
-        return true;
+        return new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            hourCycle: 'h23',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric'
+        });
     } catch (e) {
-        return false;
+        return null;
     }
 }
 
