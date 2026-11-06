@@ -30,6 +30,7 @@ const gBackgroundColorDefault = "#000000"
 const gWatchfaceDefault = 0
 const gTimeFormatDefault = "24"
 const gAmpmIndicatorDefault = false
+const gTimezoneDefault = "system"
 
 var allElements = []
 
@@ -222,6 +223,7 @@ function updateClock(jsn) {
 
         currentElement.hourFormat = jsn.payload.settings.hourFormat || gTimeFormatDefault
         currentElement.ampmindicator = jsn.payload.settings.ampmindicator === "true" || jsn.payload.settings.ampmindicator === true
+        currentElement.timezone = isValidTimezone(jsn.payload.settings.timezone) ? jsn.payload.settings.timezone : gTimezoneDefault
 
         console.log("Update settings - hourFormat:", jsn.payload.settings.hourFormat, "ampmindicator:", jsn.payload.settings.ampmindicator)
         console.log("Stored in element - hourFormat:", currentElement.hourFormat, "ampmindicator:", currentElement.ampmindicator)
@@ -272,6 +274,7 @@ function updateClock(jsn) {
 
         currentElement.hourFormat = jsn.payload.settings.hourFormat || gTimeFormatDefault
         currentElement.ampmindicator = jsn.payload.settings.ampmindicator === "true" || jsn.payload.settings.ampmindicator === true
+        currentElement.timezone = isValidTimezone(jsn.payload.settings.timezone) ? jsn.payload.settings.timezone : gTimezoneDefault
 
         console.log("New element settings - hourFormat:", jsn.payload.settings.hourFormat, "ampmindicator:", jsn.payload.settings.ampmindicator)
         console.log("New element stored - hourFormat:", currentElement.hourFormat, "ampmindicator:", currentElement.ampmindicator)
@@ -350,23 +353,22 @@ function displayTime(canvas, jsn) {
     var ampmindicator = currentElement.ampmindicator
     console.log("ampm indicator received: " + ampmindicator)
 
-    var now = new Date();
+    var now = getTimeParts(currentElement.timezone);
 
     var h
     if (hourFormat === "12") {
         console.log("12 hour format")
-        h = now.getHours() % 12 || 12;
+        h = now.hours % 12 || 12;
     } else {
         console.log("24 hour format")
-        h = now.getHours();
+        h = now.hours;
     }
 
-    var m = now.getMinutes();
-    var s = now.getSeconds();
-    var month = now.getMonth();
-    month = month + 1
-    var day = now.getDate();
-    var year = now.getFullYear();
+    var m = now.minutes;
+    var s = now.seconds;
+    var month = now.month;
+    var day = now.day;
+    var year = now.year;
      
     // var timeString = formatHour(h) + ":" + padZero(m) + ":" + padZero(s) + " " + getTimePeriod(h);
     // document.querySelector("#current-time").innerHTML = timeString;
@@ -465,7 +467,7 @@ function displayTime(canvas, jsn) {
 
             if (hourFormat === "12" && ampmindicator === true) {
                 console.log("drawing ampm indicator")
-                if (getTimePeriod(now.getHours()) === "PM") {
+                if (getTimePeriod(now.hours) === "PM") {
                     var markPeriodString = "*"
                 } else {
                     var markPeriodString = ""
@@ -488,7 +490,7 @@ function displayTime(canvas, jsn) {
 
             if (hourFormat === "12" && ampmindicator === true) {
                 console.log("drawing ampm indicator")
-                if (getTimePeriod(now.getHours()) === "PM") {
+                if (getTimePeriod(now.hours) === "PM") {
                     var markPeriodString = "*"
                 } else {
                     var markPeriodString = ""
@@ -627,6 +629,54 @@ function displayTime(canvas, jsn) {
 }
 
 
+
+// returns the current time, either in system timezone or the given tzdata timezone
+function getTimeParts(timezone) {
+    var now = new Date();
+
+    if (timezone === gTimezoneDefault) {
+        return {
+            hours: now.getHours(),
+            minutes: now.getMinutes(),
+            seconds: now.getSeconds(),
+            month: now.getMonth() + 1,
+            day: now.getDate(),
+            year: now.getFullYear()
+        }
+    }
+
+    var parts = {}
+    new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric'
+    }).formatToParts(now).forEach(part => parts[part.type] = parseInt(part.value))
+
+    return {
+        hours: parts.hour % 24,
+        minutes: parts.minute,
+        seconds: parts.second,
+        month: parts.month,
+        day: parts.day,
+        year: parts.year
+    }
+}
+
+function isValidTimezone(timezone) {
+    if (timezone === gTimezoneDefault) return true;
+    if (typeof timezone !== "string") return false;
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
 
 function isHexColor(color) {
     const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
